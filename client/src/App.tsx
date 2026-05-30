@@ -4,36 +4,48 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
-
+import { PromptProvider } from "./contexts/PromptContext";
+import Layout from "./components/Layout";
+import Dashboard from "./pages/Dashboard";
+import PromptIndex from "./pages/PromptIndex";
+import PromptDetail from "./pages/PromptDetail";
+import AddPrompt from "./pages/AddPrompt";
+import EditPrompt from "./pages/EditPrompt";
+import CategoriesAdmin from "./pages/CategoriesAdmin";
+import TagsAdmin from "./pages/TagsAdmin";
+import MigrationAdmin from "./pages/MigrationAdmin";
+import ValidationScreen from "./pages/ValidationScreen";
 
 function Router() {
   return (
-    <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
-      <Route component={NotFound} />
-    </Switch>
+    <Layout>
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/prompts" component={PromptIndex} />
+        <Route path="/prompts/:id" component={PromptDetail} />
+        <Route path="/add" component={AddPrompt} />
+        <Route path="/edit/:id" component={EditPrompt} />
+        <Route path="/categories" component={CategoriesAdmin} />
+        <Route path="/tags" component={TagsAdmin} />
+        <Route path="/migration" component={MigrationAdmin} />
+        <Route path="/validation" component={ValidationScreen} />
+        <Route path="/404" component={NotFound} />
+        <Route component={NotFound} />
+      </Switch>
+    </Layout>
   );
 }
-
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
 
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+      <ThemeProvider defaultTheme="light">
+        <PromptProvider>
+          <TooltipProvider>
+            <Toaster position="top-center" dir="rtl" />
+            <Router />
+          </TooltipProvider>
+        </PromptProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
