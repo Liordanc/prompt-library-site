@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { Prompt, PROMPTS, CATEGORIES, TAGS, SUBCATEGORIES, MIGRATION_STEPS, type Category, type Tag, type Subcategory, type MigrationStep } from '@/lib/data';
 import { toast } from 'sonner';
+import { promptApi, type SyncMode } from '@/lib/promptApi';
 
 interface PromptContextType {
   prompts: Prompt[];
@@ -8,10 +9,13 @@ interface PromptContextType {
   tags: Tag[];
   subcategories: Subcategory[];
   migrationSteps: MigrationStep[];
-  addPrompt: (prompt: Omit<Prompt, 'Prompt_ID' | 'Created_At' | 'Updated_At' | 'Version'>) => void;
-  updatePrompt: (id: string, updates: Partial<Prompt>) => void;
-  archivePrompt: (id: string) => void;
-  toggleFavorite: (id: string) => void;
+  loading: boolean;
+  syncMode: SyncMode;
+  addPrompt: (prompt: Omit<Prompt, 'Prompt_ID' | 'Created_At' | 'Updated_At' | 'Version'>) => Promise<void>;
+  updatePrompt: (id: string, updates: Partial<Prompt>) => Promise<void>;
+  archivePrompt: (id: string) => Promise<void>;
+  deletePrompt: (id: string) => Promise<void>;
+  toggleFavorite: (id: string) => Promise<void>;
   addTag: (tag: Omit<Tag, 'Tag_ID' | 'Date_Created' | 'Date_Modified'>) => void;
   updateMigrationStep: (id: number, status: MigrationStep['status']) => void;
 }
@@ -20,14 +24,22 @@ const PromptContext = createContext<PromptContextType | null>(null);
 
 export function PromptProvider({ children }: { children: React.ReactNode }) {
   const [prompts, setPrompts] = useState<Prompt[]>(PROMPTS);
+  const [loading, setLoading] = useState(true);
   const [categories] = useState<Category[]>(CATEGORIES);
   const [tags, setTags] = useState<Tag[]>(TAGS);
   const [subcategories] = useState<Subcategory[]>(SUBCATEGORIES);
   const [migrationSteps, setMigrationSteps] = useState<MigrationStep[]>(MIGRATION_STEPS);
 
-  const addPrompt = useCallback((prompt: Omit<Prompt, 'Prompt_ID' | 'Created_At' | 'Updated_At' | 'Version'>) => {
-    const now = new Date().toISOString().split('T')[0];
-    const newId = `PRM-${String(prompts.length + 1).padStart(3, '0')}`;
+  useEffect(() => {
+    promptApi.list(PROMPTS)
+      .then(setPrompts)
+      .catch(() => toast.error('הטעינה מ-Google Sheets נכשלה; מוצגת גרסה מקומית'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const addPrompt = useCallback(async (prompt: Omit<Prompt, 'Prompt_ID' | 'Created_At' | 'Updated_At' | 'Version'>) => {
+    const now = new Date().toISOString();
+    const newId = `PRM-${Date.now()}`;
     const newPrompt: Prompt = {
       ...prompt,
       Prompt_ID: newId,
@@ -35,35 +47,36 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
       Created_At: now,
       Updated_At: now,
     };
-    setPrompts(prev => [newPrompt, ...prev]);
+    const saved = await promptApi.create(newPrompt, prompts);
+    setPrompts(prev => [saved, ...prev]);
     toast.success('הפרומפט נוסף בהצלחה');
   }, [prompts.length]);
 
-  const updatePrompt = useCallback((id: string, updates: Partial<Prompt>) => {
-    const now = new Date().toISOString().split('T')[0];
-    setPrompts(prev => prev.map(p => {
-      if (p.Prompt_ID === id) {
-        const currentVersion = parseFloat(p.Version.replace('v', ''));
-        const newVersion = `v${(currentVersion + 0.1).toFixed(1)}`;
-        return { ...p, ...updates, Updated_At: now, Version: newVersion };
-      }
-      return p;
-    }));
+  const updatePrompt = useCallback(async (id: string, updates: Partial<Prompt>) => {
+    const current = prompts.find(p => p.Prompt_ID === id);
+    if (!current) return;
+    const currentVersion = parseFloat(current.Version.replace('v', '')) || 1;
+    const changed = { ...current, ...updates, Updated_At: new Date().toISOString(), Version: `v${(currentVersion + 0.1).toFixed(1)}` };
+    const saved = await promptApi.update(changed, prompts);
+    setPrompts(prev => prev.map(p => p.Prompt_ID === id ? saved : p));
     toast.success('הפרומפט עודכן בהצלחה');
-  }, []);
+  }, [prompts]);
 
-  const archivePrompt = useCallback((id: string) => {
-    setPrompts(prev => prev.map(p =>
-      p.Prompt_ID === id ? { ...p, Status: 'Archived', Category: 'ארכיון', Updated_At: new Date().toISOString().split('T')[0] } : p
-    ));
+  const archivePrompt = useCallback(async (id: string) => {
+    await updatePrompt(id, { Status: 'Archived', Category: 'ארכיון' });
     toast.success('הפרומפט הועבר לארכיון');
-  }, []);
+  }, [updatePrompt]);
 
-  const toggleFavorite = useCallback((id: string) => {
-    setPrompts(prev => prev.map(p =>
-      p.Prompt_ID === id ? { ...p, Is_Favorite: !p.Is_Favorite } : p
-    ));
-  }, []);
+  const deletePrompt = useCallback(async (id: string) => {
+    await promptApi.remove(id, prompts);
+    setPrompts(prev => prev.filter(p => p.Prompt_ID !== id));
+    toast.success('הפרומפט נמחק');
+  }, [prompts]);
+
+  const toggleFavorite = useCallback(async (id: string) => {
+    const current = prompts.find(p => p.Prompt_ID === id);
+    if (current) await updatePrompt(id, { Is_Favorite: !current.Is_Favorite });
+  }, [prompts, updatePrompt]);
 
   const addTag = useCallback((tag: Omit<Tag, 'Tag_ID' | 'Date_Created' | 'Date_Modified'>) => {
     const now = new Date().toISOString().split('T')[0];
@@ -86,8 +99,8 @@ export function PromptProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <PromptContext.Provider value={{
-      prompts, categories, tags, subcategories, migrationSteps,
-      addPrompt, updatePrompt, archivePrompt, toggleFavorite, addTag, updateMigrationStep,
+      prompts, categories, tags, subcategories, migrationSteps, loading, syncMode: promptApi.mode,
+      addPrompt, updatePrompt, archivePrompt, deletePrompt, toggleFavorite, addTag, updateMigrationStep,
     }}>
       {children}
     </PromptContext.Provider>

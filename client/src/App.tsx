@@ -15,12 +15,14 @@ import CategoriesAdmin from "./pages/CategoriesAdmin";
 import TagsAdmin from "./pages/TagsAdmin";
 import MigrationAdmin from "./pages/MigrationAdmin";
 import ValidationScreen from "./pages/ValidationScreen";
+import JulyLibrary from "./pages/JulyLibrary";
 
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
+    <Switch>
+        <Route path="/" component={JulyLibrary} />
+        <Layout>
+        <Route path="/dashboard" component={Dashboard} />
         <Route path="/prompts" component={PromptIndex} />
         <Route path="/prompts/:id" component={PromptDetail} />
         <Route path="/add" component={AddPrompt} />
@@ -31,8 +33,8 @@ function Router() {
         <Route path="/validation" component={ValidationScreen} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
+        </Layout>
       </Switch>
-    </Layout>
   );
 }
 
